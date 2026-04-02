@@ -123,6 +123,7 @@ void UGrapplingHook::TickComponent(float DeltaTime, ELevelTick TickType, FActorC
 	//Won't constantly run unless the player is actively grappling
 	if (!bIsGrappling) return;
 	
+	//Going between the modes that the player is in depending on if they are swinging or pulling
 	switch (CurrentMode)
 	{
 		case EGrappleMode::Pull:

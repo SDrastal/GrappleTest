@@ -14,6 +14,7 @@ enum class EGrappleMode : uint8
 	Swing
 };
 
+class ACharacter;
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class GRAPPLETEST_API UGrapplingHook : public UActorComponent
@@ -57,7 +58,7 @@ private:
 	UPROPERTY(EditAnywhere)
 	float StopDistance = 100.f;
 	
-	//Gets the player that the actor component is connected to
+	//Get the address of the player when connected
 	ACharacter* PlayerCharacter;
 		
 };
