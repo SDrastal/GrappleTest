@@ -6,6 +6,7 @@
 #include "Camera/CameraComponent.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 
 // Sets default values for this component's properties
 UGrapplingHook::UGrapplingHook()
@@ -25,6 +26,17 @@ void UGrapplingHook::StopGrapple()
 {
 	bIsGrappling = false;
 	CurrentMode = EGrappleMode::None;
+
+	if (!PlayerCharacter) return;
+
+	auto* Movement = PlayerCharacter->GetCharacterMovement();
+	if (!Movement) return;
+
+	// Stop ALL movement immediately
+	Movement->StopMovementImmediately();
+
+	// Reset mode
+	Movement->SetMovementMode(MOVE_Walking);
 }
 
 void UGrapplingHook::FireHook()
@@ -65,21 +77,59 @@ void UGrapplingHook::FireHook()
 
 void UGrapplingHook::HandlePull(float DeltaTime)
 {
-	//No player actor means the function does nothing
 	if (!PlayerCharacter) return;
-	
-	FVector Direction = (GrapplePoint - PlayerCharacter->GetActorLocation().GetSafeNormal());
-	FVector NewVelocity = Direction * PullSpeed;
-	
-	PlayerCharacter->GetCharacterMovement()->Velocity = NewVelocity;
-	
-	float Distance = FVector::Distance(PlayerCharacter->GetActorLocation(), GrapplePoint);
-	
-	//Stops pulling the player once they're close enough to the object
-	if (Distance <= StopDistance)
+
+	if (!bIsGrappling) return;
+
+	FVector PlayerLocation = PlayerCharacter->GetActorLocation();
+	FVector ToTarget = GrapplePoint - PlayerLocation;
+
+	float Distance = ToTarget.Size();
+	FVector Direction = ToTarget.GetSafeNormal();
+
+	auto* Movement = PlayerCharacter->GetCharacterMovement();
+	if (!Movement) return;
+
+	// If close enough STOP and HOLD
+	float CapsuleRadius = PlayerCharacter->GetCapsuleComponent()->GetScaledCapsuleRadius();
+
+	float SafeStopDistance = StopDistance + CapsuleRadius;
+
+	if (Distance <= SafeStopDistance)
 	{
-		StopGrapple();
+		Movement->Velocity = FVector::ZeroVector;
+
+		// Stop slightly BEFORE the wall
+		FVector SafeLocation = GrapplePoint - Direction * SafeStopDistance;
+
+		PlayerCharacter->SetActorLocation(SafeLocation);
+
+		Movement->SetMovementMode(MOVE_Flying);
+		return;
 	}
+
+	// Smooth slowdown when approaching target
+	float SpeedFactor = 1.0f;
+
+	if (Distance < SlowDownDistance)
+	{
+		SpeedFactor = Distance / SlowDownDistance; // 0  1
+		Movement->SetMovementMode(MOVE_Flying);
+	}
+
+	float TargetSpeed = MaxPullSpeed * SpeedFactor;
+
+	FVector DesiredVelocity = Direction * TargetSpeed;
+
+	// Smooth interpolation instead of snapping
+	FVector NewVelocity = FMath::VInterpTo(
+		Movement->Velocity,
+		DesiredVelocity,
+		DeltaTime,
+		5.0f // smoothing strength
+	);
+
+	Movement->Velocity = NewVelocity;
 }
 
 void UGrapplingHook::HandleSwing(float DeltaTime)
